@@ -5,6 +5,17 @@ const readline = require('readline').createInterface({
     output: process.stdout
 });
 
+// ---------------------------------------------------------------- Funções responsáveis pela criptografia da mensagem ----------------------------------------------------------------
+// ---------------------------------------------------------------- Cifra de Feistel -----------------------------------------------------------
+// Chamada de funções para aplicação da criptografia da mensagem de entrada informada pelo usuário
+async function encrypt() {
+    const inputMessage = await getInputString();
+    readline.close();
+    const encryptedString = feistelCipher(inputMessage, 16);
+    console.log("Entrada: ", inputMessage);
+    console.log("Saída: ", Buffer.from(encryptedString, 'utf16le').toString('hex')); // Codifica para hex para visualização
+}
+
 // Recebe mensagem de entrada fornecida pelo usuário
 async function getInputString() {
     return new Promise((resolve, reject) => {
@@ -20,8 +31,6 @@ async function getInputString() {
     });
 }
 
-// ---------------------------------------------- Cifra de Feistel ----------------------------------------------
-
 // Aplica o algoritmo de feistel
 function feistelCipher(input, rounds) {
     const sBox = generateSboxRandomly();
@@ -32,8 +41,8 @@ function feistelCipher(input, rounds) {
 
         for (let i = 0; i < rounds; i++) {
             const temp = right;
-            const row = right & 0x1F;
-            const col = (right >> 5) & 0x1F;
+            const row = right & 0x0F;
+            const col = (right >> 4) & 0x0F;
             right = left ^ sBox[row][col];
             left = temp;
         }
@@ -49,8 +58,8 @@ function feistelCipher(input, rounds) {
         } else {
             let carac = input[i].charCodeAt(0);
             for (let j = 0; j < rounds; j++) {
-                const row = carac & 0x1F;
-                const col = (carac >> 5) & 0x1F;
+                const row = carac & 0x0F;
+                const col = (carac >> 4) & 0x0F;
                 carac = carac ^ sBox[row][col];
             }
             output += String.fromCharCode(carac);
@@ -61,16 +70,18 @@ function feistelCipher(input, rounds) {
     return output;
 }
 
-// Gerar randomicamente a uma sBox (usando o módulo crypto do node.js)
+// Gerar randomicamente uma sBox de 256 bits (usando o módulo crypto do node.js)
 function generateSboxRandomly() {
-    let sBox = [];
-    const mDimension = 32;
+    const sBox = [];
+    const mDimension = 16;
     const randomBytes = crypto.randomBytes(mDimension * mDimension * 2);
+
     for (let i = 0; i < mDimension * mDimension; i++) {
         const value = randomBytes.readUInt16BE(i * 2);
         sBox.push(value);
     }
-    // Faz a transformação para uma matriz 32 x 32
+
+    // Transformar em uma matriz 16 x 16
     const matrix = [];
     for (let i = 0; i < mDimension; i++) {
         matrix.push(sBox.slice(i * mDimension, (i + 1) * mDimension));
@@ -78,21 +89,62 @@ function generateSboxRandomly() {
     return matrix;
 }
 
-// ---------------------------------------------- Função principal ----------------------------------------------
+// --------------------------------------------------------------------------- Funções principais ---------------------------------------------------------------------------
 
-// Função principal que cria menu para o usuário escolher algumas opções no programa
-async function main(){
-    return new Promise;
+// Função responsável pela criação do menu e retorno da opção escolhida pelo usuário
+async function main() {
+    return new Promise((resolve, reject) => {
+        console.log("\n----- Menu -----");
+        console.log("1. Criptografar uma mensagem");
+        console.log("2. Decriptar uma mensagem");
+        console.log("3. Realizar testes de execucao");
+        console.log("4. Sair");
+
+        readline.question("Favor informar o numero da opcao desejada: ", (option) => {
+            switch (option.trim()) {
+                case '1':
+                    resolve('encrypt');
+                    break;
+                case '2':
+                    resolve('decrypt');
+                    break;
+                case '3':
+                    resolve('test');
+                    break;
+                case '4':
+                    console.log("Saindo do programa.");
+                    readline.close();
+                    process.exit(0);
+                default:
+                    console.log("Opção inválida! Tente novamente.");
+                    main().then(resolve).catch(reject);
+                    break;
+            }
+        });
+    });
 }
 
-// Chamada de funções para aplicação da criptografia da mensagem de entrada informada pelo usuário
-async function encrypt() {
-    const inputMessage = await getInputString();
-    readline.close();
-    const encryptedString = feistelCipher(inputMessage, 16);
-    console.log("Entrada: ", inputMessage);
-    console.log("Saída: ", Buffer.from(encryptedString, 'utf16le').toString('hex')); // Codifica para hex para visualização
+// Função principal do programa
+async function run() {
+    const option = await main();
+    switch (option) {
+        case 'encrypt':
+            await encrypt();
+            break;
+        case 'decrypt':
+            console.log("Preciso implementar");
+            readline.close();
+            break;
+        case 'test':
+            console.log("Preciso implementar");
+            readline.close();
+            break;
+        default:
+            console.log("Erro inesperado.");
+            readline.close();
+            break;
+    }
 }
 
 // Chama a função principal
-encrypt();
+run();
