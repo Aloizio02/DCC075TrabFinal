@@ -1,44 +1,55 @@
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
 const readline = require('readline').createInterface({
     input: process.stdin,
     output: process.stdout
 });
 
-// ---------------------------------------------------------------- Funções responsáveis pela criptografia da mensagem ----------------------------------------------------------------
-// ---------------------------------------------------------------- Cifra de Feistel -----------------------------------------------------------
-// Chamada de funções para aplicação da criptografia da mensagem de entrada informada pelo usuário
+// ---------------------------------------------- Cifra de Feistel para Arquivos ----------------------------------------------
+
+// Chamada de funções para aplicação da criptografia do arquivo informado pelo usuário
 async function encrypt() {
-    const inputMessage = await getInputString();
+    const { directory, filename } = await getFilePath();
     readline.close();
-    const encryptedString = feistelCipher(inputMessage, 16);
-    console.log("Entrada: ", inputMessage);
-    console.log("Saída: ", Buffer.from(encryptedString, 'utf16le').toString('hex')); // Codifica para hex para visualização
+
+    const inputFilePath = path.join(directory, filename);
+    const outputFilePath = path.join(directory, 'arquivo_criptografado.dat');
+
+    // Ler o arquivo em formato binário
+    const inputBuffer = fs.readFileSync(inputFilePath);
+
+    // Aplicar a cifra de Feistel no buffer de bytes
+    const encryptedBuffer = feistelCipherBuffer(inputBuffer, 16);
+
+    // Salvar o resultado criptografado em um novo arquivo
+    fs.writeFileSync(outputFilePath, encryptedBuffer);
+
+    console.log(`Arquivo criptografado salvo como: ${outputFilePath}`);
 }
 
-// Recebe mensagem de entrada fornecida pelo usuário
-async function getInputString() {
+// Recebe o diretório e o nome do arquivo fornecidos pelo usuário
+async function getFilePath() {
     return new Promise((resolve, reject) => {
-        readline.question("Informe uma mensagem de entrada: ", (auxWord) => {
-            auxWord = auxWord.replace(/\s+/g, '');
-            if (auxWord) {
-                resolve(auxWord);
-            } else {
-                console.log("Entrada inválida! Tente novamente. \n");
-                getInputString();
-            }
+        readline.question("Informe o diretório do arquivo: ", (directory) => {
+            readline.question("Informe o nome do arquivo: ", (filename) => {
+                if (directory && filename) {
+                    resolve({ directory: directory.trim(), filename: filename.trim() });
+                } else {
+                    console.log("Entrada inválida! Tente novamente.\n");
+                    getFilePath().then(resolve).catch(reject);
+                }
+            });
         });
     });
 }
 
-// Aplica o algoritmo de feistel
-function feistelCipher(input, rounds) {
+// Aplica o algoritmo de Feistel para um buffer de bytes
+function feistelCipherBuffer(inputBuffer, rounds) {
     const sBox = generateSboxRandomly();
 
-    function feistel(input, rounds) {
-        let left = input.charCodeAt(0);
-        let right = input.charCodeAt(1);
-
+    function feistel(left, right, rounds) {
         for (let i = 0; i < rounds; i++) {
             const temp = right;
             const row = right & 0x0F;
@@ -46,28 +57,27 @@ function feistelCipher(input, rounds) {
             right = left ^ sBox[row][col];
             left = temp;
         }
-
-        return String.fromCharCode(right) + String.fromCharCode(left);
+        return [left, right];
     }
 
-    let output = '';
-    let i = 0;
-    while (i < input.length) {
-        if (i + 1 < input.length) {
-            output += feistel(input.substr(i, 2), rounds);
+    let outputBuffer = Buffer.alloc(inputBuffer.length);
+    for (let i = 0; i < inputBuffer.length; i += 2) {
+        if (i + 1 < inputBuffer.length) {
+            const [left, right] = feistel(inputBuffer[i], inputBuffer[i + 1], rounds);
+            outputBuffer[i] = left;
+            outputBuffer[i + 1] = right;
         } else {
-            let carac = input[i].charCodeAt(0);
+            let byte = inputBuffer[i];
             for (let j = 0; j < rounds; j++) {
-                const row = carac & 0x0F;
-                const col = (carac >> 4) & 0x0F;
-                carac = carac ^ sBox[row][col];
+                const row = byte & 0x0F;
+                const col = (byte >> 4) & 0x0F;
+                byte = byte ^ sBox[row][col];
             }
-            output += String.fromCharCode(carac);
+            outputBuffer[i] = byte;
         }
-        i += 2;
     }
 
-    return output;
+    return outputBuffer;
 }
 
 // Gerar randomicamente uma sBox de 256 bits (usando o módulo crypto do node.js)
@@ -95,12 +105,12 @@ function generateSboxRandomly() {
 async function main() {
     return new Promise((resolve, reject) => {
         console.log("\n----- Menu -----");
-        console.log("1. Criptografar uma mensagem");
-        console.log("2. Decriptar uma mensagem");
-        console.log("3. Realizar testes de execucao");
+        console.log("1. Criptografar um arquivo");
+        console.log("2. Decriptar um arquivo");
+        console.log("3. Realizar testes de execução");
         console.log("4. Sair");
 
-        readline.question("Favor informar o numero da opcao desejada: ", (option) => {
+        readline.question("Favor informar o número da opção desejada: ", (option) => {
             switch (option.trim()) {
                 case '1':
                     resolve('encrypt');
