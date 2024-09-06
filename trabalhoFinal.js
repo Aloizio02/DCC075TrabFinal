@@ -9,8 +9,12 @@ const readline = require('readline').createInterface({
 // ---------------------------------------------- Etapa de criptografia ----------------------------------------------
 // Função principal para a criptografia
 async function encrypt() {
-    // Gera as chaves RSA se ainda não existirem
-    generateRSAKeys();
+    // Pede ao usuário o caminho para a chave pública do destinatário
+    const publicKeyPath = await getPublicKeyPath();
+    if (!fs.existsSync(publicKeyPath)) {
+        console.log(`Arquivo de chave pública não encontrado: ${publicKeyPath}`);
+        return;
+    }
 
     // Salva a mensagem informada pelo usuário
     const inputMessage = await getInputMessage();
@@ -27,7 +31,7 @@ async function encrypt() {
     const encryptedSBox = encryptWithAES(JSON.stringify(sBox), aesKey);
 
     // Criptografa a chave AES usando RSA
-    const encryptedAESKey = encryptWithRSA(aesKey);
+    const encryptedAESKey = encryptWithRSA(aesKey, publicKeyPath);
 
     // Salva o sBox criptografado e a chave AES criptografada
     fs.writeFileSync('encrypted_sbox.dat', encryptedSBox);
@@ -37,7 +41,7 @@ async function encrypt() {
     console.log('Chave AES salva em "encrypted_aes_key.dat".');
 }
 
-// Recebe uma mensagem de entrada fornecida pelo usuário
+// Recebe a mensagem de entrada fornecida pelo usuário
 async function getInputMessage() {
     return new Promise((resolve, reject) => {
         readline.question("Informe uma mensagem para criptografar: ", (message) => {
@@ -48,6 +52,15 @@ async function getInputMessage() {
                 console.log("Entrada invalida! Tente novamente.\n");
                 getInputMessage().then(resolve).catch(reject);
             }
+        });
+    });
+}
+
+// Recebe o caminho da chave pública do destinatário
+async function getPublicKeyPath() {
+    return new Promise((resolve) => {
+        readline.question("Informe o caminho para a chave publica do destinatario: ", (path) => {
+            resolve(path.trim());
         });
     });
 }
@@ -113,47 +126,15 @@ function encryptWithAES(data, aesKey) {
 }
 
 // ---------------------------------------------- Terceira camada: RSA aplicada na chave AES ----------------------------------------------
-// Função para gerar as chaves RSA se elas não existirem
-function generateRSAKeys() {
-    const privateKeyPath = 'private.pem';
-    const publicKeyPath = 'public.pem';
-
-    // Verifica se as chaves já existem
-    if (!fs.existsSync(privateKeyPath) || !fs.existsSync(publicKeyPath)) {
-        console.log("Gerando chaves RSA...");
-
-        // Gerar par de chaves RSA
-        const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', {
-            modulusLength: 2048,
-            publicKeyEncoding: {
-                type: 'pkcs1',
-                format: 'pem'
-            },
-            privateKeyEncoding: {
-                type: 'pkcs1',
-                format: 'pem'
-            }
-        });
-
-        // Salvar chaves no sistema de arquivos
-        fs.writeFileSync(privateKeyPath, privateKey);
-        fs.writeFileSync(publicKeyPath, publicKey);
-
-        console.log("Chaves RSA geradas e salvas em 'private.pem' e 'public.pem'.");
-    } else {
-        console.log("Chaves RSA já existem.");
-    }
-}
-
 // Função para criptografar dados usando a chave pública RSA
-function encryptWithRSA(data) {
-    const publicKey = fs.readFileSync('public.pem', 'utf8');
+function encryptWithRSA(data, publicKeyPath) {
+    const publicKey = fs.readFileSync(publicKeyPath, 'utf8');
     return crypto.publicEncrypt(publicKey, Buffer.from(data));
 }
 
 // Função para descriptografar dados usando a chave privada RSA
-function decryptWithRSA(encryptedData) {
-    const privateKey = fs.readFileSync('private.pem', 'utf8');
+function decryptWithRSA(encryptedData, privateKeyPath) {
+    const privateKey = fs.readFileSync(privateKeyPath, 'utf8');
     return crypto.privateDecrypt(privateKey, encryptedData);
 }
 
