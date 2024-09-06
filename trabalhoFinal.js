@@ -1,54 +1,60 @@
 const crypto = require('crypto');
 const fs = require('fs');
-const path = require('path');
-
+const CryptoJS = require('crypto-js');
 const readline = require('readline').createInterface({
     input: process.stdin,
     output: process.stdout
 });
 
-// ---------------------------------------------- Cifra de Feistel para Arquivos ----------------------------------------------
-
-// Chamada de funções para aplicação da criptografia do arquivo informado pelo usuário
+// ---------------------------------------------- Etapa de criptografia ----------------------------------------------
+// Função principal para a criptografia
 async function encrypt() {
-    const { directory, filename } = await getFilePath();
-    readline.close();
+    // Gera as chaves RSA se ainda não existirem
+    generateRSAKeys();
 
-    const inputFilePath = path.join(directory, filename);
-    const outputFilePath = path.join(directory, 'arquivo_criptografado.dat');
+    // Salva a mensagem informada pelo usuário
+    const inputMessage = await getInputMessage();
 
-    // Ler o arquivo em formato binário
-    const inputBuffer = fs.readFileSync(inputFilePath);
+    // Gera uma sBox randomicamente
+    const sBox = generateSboxRandomly();
 
-    // Aplicar a cifra de Feistel no buffer de bytes
-    const encryptedBuffer = feistelCipherBuffer(inputBuffer, 16);
+    // Criptografa a mensagem com a cifra de Feistel
+    const encryptedMessage = feistelCipherBuffer(Buffer.from(inputMessage), sBox, 16);
+    console.log(`Mensagem criptografada: ${encryptedMessage.toString('hex')}`);
 
-    // Salvar o resultado criptografado em um novo arquivo
-    fs.writeFileSync(outputFilePath, encryptedBuffer);
+    // Gera uma chave AES
+    const aesKey = crypto.randomBytes(32).toString('hex');
+    const encryptedSBox = encryptWithAES(JSON.stringify(sBox), aesKey);
 
-    console.log(`Arquivo criptografado salvo como: ${outputFilePath}`);
+    // Criptografa a chave AES usando RSA
+    const encryptedAESKey = encryptWithRSA(aesKey);
+
+    // Salva o sBox criptografado e a chave AES criptografada
+    fs.writeFileSync('encrypted_sbox.dat', encryptedSBox);
+    fs.writeFileSync('encrypted_aes_key.dat', encryptedAESKey);
+
+    console.log('sBox salvo em "encrypted_sbox.dat".');
+    console.log('Chave AES salva em "encrypted_aes_key.dat".');
 }
 
-// Recebe o diretório e o nome do arquivo fornecidos pelo usuário
-async function getFilePath() {
+// Recebe uma mensagem de entrada fornecida pelo usuário
+async function getInputMessage() {
     return new Promise((resolve, reject) => {
-        readline.question("Informe o diretório do arquivo: ", (directory) => {
-            readline.question("Informe o nome do arquivo: ", (filename) => {
-                if (directory && filename) {
-                    resolve({ directory: directory.trim(), filename: filename.trim() });
-                } else {
-                    console.log("Entrada inválida! Tente novamente.\n");
-                    getFilePath().then(resolve).catch(reject);
-                }
-            });
+        readline.question("Informe uma mensagem para criptografar: ", (message) => {
+            message = message.replace(/\s+/g, '');
+            if (message) {
+                resolve(message);
+            } else {
+                console.log("Entrada invalida! Tente novamente.\n");
+                getInputMessage().then(resolve).catch(reject);
+            }
         });
     });
 }
 
+// ---------------------------------------------- Primeira camada: Algoritmo de Feistel na mensagem ----------------------------------------------
 // Aplica o algoritmo de Feistel para um buffer de bytes
-function feistelCipherBuffer(inputBuffer, rounds) {
-    const sBox = generateSboxRandomly();
-
+function feistelCipherBuffer(inputBuffer, sBox, rounds) {
     function feistel(left, right, rounds) {
         for (let i = 0; i < rounds; i++) {
             const temp = right;
@@ -99,15 +105,67 @@ function generateSboxRandomly() {
     return matrix;
 }
 
-// --------------------------------------------------------------------------- Funções principais ---------------------------------------------------------------------------
+// ---------------------------------------------- Segunda camada: AES aplicado no sBox da Cifra de Feistel ----------------------------------------------
+// Função que será usada para criptografar a sBox em uma chave AES
+function encryptWithAES(data, aesKey) {
+    const ciphertext = CryptoJS.AES.encrypt(data, aesKey).toString();
+    return ciphertext;
+}
+
+// ---------------------------------------------- Terceira camada: RSA aplicada na chave AES ----------------------------------------------
+// Função para gerar as chaves RSA se elas não existirem
+function generateRSAKeys() {
+    const privateKeyPath = 'private.pem';
+    const publicKeyPath = 'public.pem';
+
+    // Verifica se as chaves já existem
+    if (!fs.existsSync(privateKeyPath) || !fs.existsSync(publicKeyPath)) {
+        console.log("Gerando chaves RSA...");
+
+        // Gerar par de chaves RSA
+        const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', {
+            modulusLength: 2048,
+            publicKeyEncoding: {
+                type: 'pkcs1',
+                format: 'pem'
+            },
+            privateKeyEncoding: {
+                type: 'pkcs1',
+                format: 'pem'
+            }
+        });
+
+        // Salvar chaves no sistema de arquivos
+        fs.writeFileSync(privateKeyPath, privateKey);
+        fs.writeFileSync(publicKeyPath, publicKey);
+
+        console.log("Chaves RSA geradas e salvas em 'private.pem' e 'public.pem'.");
+    } else {
+        console.log("Chaves RSA já existem.");
+    }
+}
+
+// Função para criptografar dados usando a chave pública RSA
+function encryptWithRSA(data) {
+    const publicKey = fs.readFileSync('public.pem', 'utf8');
+    return crypto.publicEncrypt(publicKey, Buffer.from(data));
+}
+
+// Função para descriptografar dados usando a chave privada RSA
+function decryptWithRSA(encryptedData) {
+    const privateKey = fs.readFileSync('private.pem', 'utf8');
+    return crypto.privateDecrypt(privateKey, encryptedData);
+}
+
+// ---------------------------------------------- Funções Principais ----------------------------------------------
 
 // Função responsável pela criação do menu e retorno da opção escolhida pelo usuário
 async function main() {
     return new Promise((resolve, reject) => {
         console.log("\n----- Menu -----");
-        console.log("1. Criptografar um arquivo");
-        console.log("2. Decriptar um arquivo");
-        console.log("3. Realizar testes de execução");
+        console.log("1. Criptografar uma mensagem");
+        console.log("2. Decriptografar uma mensagem");
+        console.log("3. Ambiente de testes");
         console.log("4. Sair");
 
         readline.question("Favor informar o número da opção desejada: ", (option) => {
@@ -119,7 +177,7 @@ async function main() {
                     resolve('decrypt');
                     break;
                 case '3':
-                    resolve('test');
+                    resolve('testEnvironment');
                     break;
                 case '4':
                     console.log("Saindo do programa.");
@@ -142,11 +200,10 @@ async function run() {
             await encrypt();
             break;
         case 'decrypt':
-            console.log("Preciso implementar");
-            readline.close();
+            console.log("Decrypt ainda não implementado.");
             break;
-        case 'test':
-            console.log("Preciso implementar");
+        case 'testEnvironment':
+            console.log("Geração de relatórios não implementada.");
             readline.close();
             break;
         default:
