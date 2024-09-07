@@ -6,7 +6,7 @@ const readline = require('readline').createInterface({
     output: process.stdout
 });
 
-// ---------------------------------------------- Etapa de criptografia ----------------------------------------------
+// ----------------------------------------------------------------------------- Etapa de criptografia -----------------------------------------------------------------------------
 // Função principal para a criptografia
 async function encrypt() {
     // Pede ao usuário o caminho contendo a chave pública do destinatário
@@ -25,6 +25,10 @@ async function encrypt() {
     // Criptografa a mensagem com a cifra de Feistel
     const encryptedMessage = feistelCipherBuffer(Buffer.from(inputMessage), sBox, 16);
     console.log(`Mensagem criptografada: ${encryptedMessage.toString('hex')}`);
+
+    // Salva a mensagem criptografada em um arquivo
+    fs.writeFileSync('encrypted_message.txt', encryptedMessage.toString('hex'));
+    console.log('Mensagem criptografada salva em "encrypted_message.txt".');
 
     // Gera uma chave AES
     const aesKey = crypto.randomBytes(32).toString('hex');
@@ -132,15 +136,14 @@ function encryptWithRSA(data, receivePublicKey) {
     return crypto.publicEncrypt(publicKey, Buffer.from(data));
 }
 
-// Função para descriptografar dados usando a chave privada RSA
-function decryptWithRSA(encryptedData, privateKeyPath) {
-    const privateKey = fs.readFileSync(privateKeyPath, 'utf8');
-    return crypto.privateDecrypt(privateKey, encryptedData);
-}
-
-// ---------------------------------------------- Etapa de decriptografia ----------------------------------------------
-// Função principal para decriptografia
+// ----------------------------------------------------------------------------- Etapa de descriptografia -----------------------------------------------------------------------------
+// Função principal para descriptografia
 async function decrypt() {
+    const privateKeyPath = await getPrivateKeyPath();
+    if (!fs.existsSync(privateKeyPath)) {
+        console.log(`Arquivo da chave privada não encontrado. Verifique e tente novamente!`);
+        return;
+    }
     const encryptedAESKeyPath = await getEncryptedAESKeyPath();
     if (!fs.existsSync(encryptedAESKeyPath)) {
         console.log(`Arquivo da chave AES criptografada não encontrado. Verifique e tente novamente!`);
@@ -149,17 +152,44 @@ async function decrypt() {
     const encryptedSBoxPath = await getEncryptedSBoxPath();
     if (!fs.existsSync(encryptedSBoxPath)) {
         console.log(`Arquivo do sBox criptografado não encontrado. Verifique e tente novamente!`);
-        return null;
+        return;
     }
     const encryptedMessagePath = await getEncryptedMessagePath();
     if (!fs.existsSync(encryptedMessagePath)) {
         console.log(`Arquivo da mensagem criptografada não encontrado. Verifique e tente novamente!`);
-        return null;
+        return;
     }
-    
+
+    // Lê o conteúdo dos arquivos
+    const encryptedAESKey = fs.readFileSync(encryptedAESKeyPath);
+    const encryptedSBox = fs.readFileSync(encryptedSBoxPath, 'utf8');
+    const encryptedMessageHex = fs.readFileSync(encryptedMessagePath, 'utf8');
+
+    // Converte a mensagem criptografada de hexadecimal para buffer
+    const encryptedMessage = Buffer.from(encryptedMessageHex, 'hex');
+
+    // Descriptografa a chave AES usando a chave privada RSA
+    const aesKey = decryptWithRSA(encryptedAESKey, privateKeyPath).toString('utf8');
+
+    // Descriptografa o sBox usando a chave AES
+    const decryptedSBox = decryptWithAES(encryptedSBox, aesKey);
+
+    // Descriptografa a mensagem usando o sBox descriptografado
+    const decryptedMessageBuffer = feistelDecipherBuffer(encryptedMessage, decryptedSBox, 16);
+
+    console.log(`Mensagem descriptografada : ${decryptedMessageBuffer.toString('utf8')}`);
 }
 
-// Recebe do usuário a chave AES criptografada pelo RSA
+// Recebe do usuário o path da chave privada
+async function getPrivateKeyPath() {
+    return new Promise((resolve) => {
+        readline.question("Informe o caminho para a chave RSA privada: ", (path) => {
+            resolve(path.trim());
+        });
+    });
+}
+
+// Recebe do usuário o path da chave AES criptografada pelo RSA
 async function getEncryptedAESKeyPath() {
     return new Promise((resolve) => {
         readline.question("Informe o caminho para a chave AES criptografada: ", (path) => {
@@ -168,7 +198,7 @@ async function getEncryptedAESKeyPath() {
     });
 }
 
-// Recebe do usuário a sBox usada em Feistel criptografada pelo AES
+// Recebe do usuário o path da sBox usada em Feistel criptografada pelo AES
 async function getEncryptedSBoxPath() {
     return new Promise((resolve) => {
         readline.question("Informe o caminho para o sBox criptografado: ", (path) => {
@@ -177,7 +207,7 @@ async function getEncryptedSBoxPath() {
     });
 }
 
-// Recebe do usuário a mensagem criptografada
+// Recebe do usuário o path da mensagem criptografada
 async function getEncryptedMessagePath() {
     return new Promise((resolve) => {
         readline.question("Informe o caminho para a mensagem criptografada: ", (path) => {
@@ -186,61 +216,71 @@ async function getEncryptedMessagePath() {
     });
 }
 
-// ---------------------------------------------- Funções Principais ----------------------------------------------
-
-// Função responsável pela criação do menu e retorno da opção escolhida pelo usuário
-async function main() {
-    return new Promise((resolve, reject) => {
-        console.log("\n----- Menu -----");
-        console.log("1. Criptografar uma mensagem");
-        console.log("2. Decriptografar uma mensagem");
-        console.log("3. Ambiente de testes");
-        console.log("4. Sair");
-
-        readline.question("Favor informar o número da opção desejada: ", (option) => {
-            switch (option.trim()) {
-                case '1':
-                    resolve('encrypt');
-                    break;
-                case '2':
-                    resolve('decrypt');
-                    break;
-                case '3':
-                    resolve('testEnvironment');
-                    break;
-                case '4':
-                    console.log("Saindo do programa.");
-                    readline.close();
-                    process.exit(0);
-                default:
-                    console.log("Opção inválida! Tente novamente.");
-                    main().then(resolve).catch(reject);
-                    break;
-            }
-        });
-    });
+// Função para descriptografar a chave AES criptografada com RSA
+function decryptWithRSA(encryptedData, privateKeyPath) {
+    const privateKey = fs.readFileSync(privateKeyPath, 'utf8');
+    return crypto.privateDecrypt(
+        {
+            key: privateKey,
+            passphrase: '',
+        },
+        encryptedData
+    );
 }
 
-// Função principal do programa
-async function run() {
-    const option = await main();
-    switch (option) {
-        case 'encrypt':
-            await encrypt();
-            break;
-        case 'decrypt':
-            console.log("Decrypt ainda não implementado.");
-            break;
-        case 'testEnvironment':
-            console.log("Geração de relatórios não implementada.");
-            readline.close();
-            break;
-        default:
-            console.log("Erro inesperado.");
-            readline.close();
-            break;
+// Função para descriptografar o sBox
+function decryptWithAES(ciphertext, aesKey) {
+    const bytes = CryptoJS.AES.decrypt(ciphertext, aesKey);
+    return JSON.parse(bytes.toString(CryptoJS.enc.Utf8));
+}
+
+// Aplica o algoritmo de Feistel para decifrar o buffer de bytes
+function feistelDecipherBuffer(encryptedBuffer, sBox, rounds) {
+    function feistelDecipher(left, right, rounds) {
+        for (let i = 0; i < rounds; i++) {
+            const temp = left;
+            const row = left & 0x0F;
+            const col = (left >> 4) & 0x0F;
+            left = right ^ sBox[row][col];
+            right = temp;
+        }
+        return [left, right];
     }
+
+    let outputBuffer = Buffer.alloc(encryptedBuffer.length);
+    for (let i = 0; i < encryptedBuffer.length; i += 2) {
+        if (i + 1 < encryptedBuffer.length) {
+            const [left, right] = feistelDecipher(encryptedBuffer[i], encryptedBuffer[i + 1], rounds);
+            outputBuffer[i] = left;
+            outputBuffer[i + 1] = right;
+        } else {
+            let byte = encryptedBuffer[i];
+            for (let j = 0; j < rounds; j++) {
+                const row = byte & 0x0F;
+                const col = (byte >> 4) & 0x0F;
+                byte = byte ^ sBox[row][col];
+            }
+            outputBuffer[i] = byte;
+        }
+    }
+
+    return outputBuffer;
 }
 
-// Chama a função principal
-run();
+// Chamadas principais para as funções de criptografia e descriptografia
+(async () => {
+    console.log("Escolha uma opção: ");
+    console.log("1. Criptografar uma mensagem");
+    console.log("2. Descriptografar uma mensagem");
+
+    readline.question("Opção: ", async (option) => {
+        if (option === '1') {
+            await encrypt();
+        } else if (option === '2') {
+            await decrypt();
+        } else {
+            console.log("Opção inválida!");
+        }
+        readline.close();
+    });
+})();
