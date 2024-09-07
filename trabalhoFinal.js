@@ -144,6 +144,9 @@ async function decrypt() {
         console.log(`Arquivo da chave privada não encontrado. Verifique e tente novamente!`);
         return;
     }
+    const passphrase = await new Promise((resolve) => {
+        readline.question("Informe a senha da chave RSA privada (se houver senha): ", resolve);
+    });
     const encryptedAESKeyPath = await getEncryptedAESKeyPath();
     if (!fs.existsSync(encryptedAESKeyPath)) {
         console.log(`Arquivo da chave AES criptografada não encontrado. Verifique e tente novamente!`);
@@ -169,7 +172,7 @@ async function decrypt() {
     const encryptedMessage = Buffer.from(encryptedMessageHex, 'hex');
 
     // Descriptografa a chave AES usando a chave privada RSA
-    const aesKey = decryptWithRSA(encryptedAESKey, privateKeyPath).toString('utf8');
+    const aesKey = decryptWithRSA(encryptedAESKey, privateKeyPath, passphrase).toString('utf8');
 
     // Descriptografa o sBox usando a chave AES
     const decryptedSBox = decryptWithAES(encryptedSBox, aesKey);
@@ -216,13 +219,13 @@ async function getEncryptedMessagePath() {
     });
 }
 
-// Função para descriptografar a chave AES criptografada com RSA
-function decryptWithRSA(encryptedData, privateKeyPath) {
+// Função para descriptografar dados usando a chave privada RSA
+function decryptWithRSA(encryptedData, privateKeyPath, passphrase) {
     const privateKey = fs.readFileSync(privateKeyPath, 'utf8');
     return crypto.privateDecrypt(
         {
             key: privateKey,
-            passphrase: '',
+            passphrase: passphrase,
         },
         encryptedData
     );
