@@ -49,7 +49,6 @@ async function encrypt() {
 async function getInputMessage() {
     return new Promise((resolve, reject) => {
         readline.question("Informe uma mensagem para criptografar: ", (message) => {
-            message = message.replace(/\s+/g, '');
             if (message) {
                 resolve(message);
             } else {
@@ -270,7 +269,7 @@ function feistelDecipherBuffer(encryptedBuffer, sBox, rounds) {
     return outputBuffer;
 }
 
-// Chamadas principais para as funções de criptografia e descriptografia
+// Chamadas principais para as funções de criptografia, descriptografia e ambiente de testes
 (async () => {
     console.log("Escolha uma opção: ");
     console.log("1. Criptografar uma mensagem");
