@@ -71,6 +71,10 @@ async function getPublicKeyPath() {
 // ---------------------------------------------- Primeira camada: Algoritmo de Feistel na mensagem ----------------------------------------------
 // Aplica o algoritmo de Feistel para um buffer de bytes
 function feistelCipherBuffer(inputBuffer, sBox, rounds) {
+    if (inputBuffer.length % 2 !== 0) {
+        inputBuffer = Buffer.concat([inputBuffer, Buffer.from([0x00])]);
+    }
+
     function feistel(left, right, rounds) {
         for (let i = 0; i < rounds; i++) {
             const temp = right;
@@ -264,6 +268,10 @@ function feistelDecipherBuffer(encryptedBuffer, sBox, rounds) {
             }
             outputBuffer[i] = byte;
         }
+    }
+    
+    if (outputBuffer[outputBuffer.length - 1] === 0x00) {
+        outputBuffer = outputBuffer.slice(0, -1);
     }
 
     return outputBuffer;
