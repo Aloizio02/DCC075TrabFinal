@@ -9,10 +9,10 @@ const readline = require('readline').createInterface({
 // ---------------------------------------------- Etapa de criptografia ----------------------------------------------
 // Função principal para a criptografia
 async function encrypt() {
-    // Pede ao usuário o caminho para a chave pública do destinatário
-    const publicKeyPath = await getPublicKeyPath();
-    if (!fs.existsSync(publicKeyPath)) {
-        console.log(`Arquivo de chave pública não encontrado: ${publicKeyPath}`);
+    // Pede ao usuário o caminho contendo a chave pública do destinatário
+    let publicKeyPath = await getPublicKeyPath();
+    if(!fs.existsSync(publicKeyPath)) {
+        console.log(`Arquivo de chave pública não encontrado. Verifique e tente novamente!`);
         return;
     }
 
@@ -30,7 +30,7 @@ async function encrypt() {
     const aesKey = crypto.randomBytes(32).toString('hex');
     const encryptedSBox = encryptWithAES(JSON.stringify(sBox), aesKey);
 
-    // Criptografa a chave AES usando RSA
+    // Criptografa a chave AES usando a chave pública RSA do destinatário
     const encryptedAESKey = encryptWithRSA(aesKey, publicKeyPath);
 
     // Salva o sBox criptografado e a chave AES criptografada
@@ -127,8 +127,8 @@ function encryptWithAES(data, aesKey) {
 
 // ---------------------------------------------- Terceira camada: RSA aplicada na chave AES ----------------------------------------------
 // Função para criptografar dados usando a chave pública RSA
-function encryptWithRSA(data, publicKeyPath) {
-    const publicKey = fs.readFileSync(publicKeyPath, 'utf8');
+function encryptWithRSA(data, receivePublicKey) {
+    const publicKey = fs.readFileSync(receivePublicKey, 'utf8');
     return crypto.publicEncrypt(publicKey, Buffer.from(data));
 }
 
@@ -136,6 +136,54 @@ function encryptWithRSA(data, publicKeyPath) {
 function decryptWithRSA(encryptedData, privateKeyPath) {
     const privateKey = fs.readFileSync(privateKeyPath, 'utf8');
     return crypto.privateDecrypt(privateKey, encryptedData);
+}
+
+// ---------------------------------------------- Etapa de decriptografia ----------------------------------------------
+// Função principal para decriptografia
+async function decrypt() {
+    const encryptedAESKeyPath = await getEncryptedAESKeyPath();
+    if (!fs.existsSync(encryptedAESKeyPath)) {
+        console.log(`Arquivo da chave AES criptografada não encontrado. Verifique e tente novamente!`);
+        return;
+    }
+    const encryptedSBoxPath = await getEncryptedSBoxPath();
+    if (!fs.existsSync(encryptedSBoxPath)) {
+        console.log(`Arquivo do sBox criptografado não encontrado. Verifique e tente novamente!`);
+        return null;
+    }
+    const encryptedMessagePath = await getEncryptedMessagePath();
+    if (!fs.existsSync(encryptedMessagePath)) {
+        console.log(`Arquivo da mensagem criptografada não encontrado. Verifique e tente novamente!`);
+        return null;
+    }
+    
+}
+
+// Recebe do usuário a chave AES criptografada pelo RSA
+async function getEncryptedAESKeyPath() {
+    return new Promise((resolve) => {
+        readline.question("Informe o caminho para a chave AES criptografada: ", (path) => {
+            resolve(path.trim());
+        });
+    });
+}
+
+// Recebe do usuário a sBox usada em Feistel criptografada pelo AES
+async function getEncryptedSBoxPath() {
+    return new Promise((resolve) => {
+        readline.question("Informe o caminho para o sBox criptografado: ", (path) => {
+            resolve(path.trim());
+        });
+    });
+}
+
+// Recebe do usuário a mensagem criptografada
+async function getEncryptedMessagePath() {
+    return new Promise((resolve) => {
+        readline.question("Informe o caminho para a mensagem criptografada: ", (path) => {
+            resolve(path.trim());
+        });
+    });
 }
 
 // ---------------------------------------------- Funções Principais ----------------------------------------------
