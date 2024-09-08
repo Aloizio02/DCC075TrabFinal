@@ -307,36 +307,105 @@ async function performanceTests(){
     // Salva a mensagem informada pelo usuário
     const inputMessage = await getInputMessage();
 
-    // Cria as chaves locais para criptografar e descriptografar a mensagem
+    // Cria as chaves RSA locais para criptografar e descriptografar a mensagem
     createKeys();
 
-    // Chama função que calcula tempo de execução e uso de memória entre algoritmos no momento de criptografar
-    encryptMessage(inputMessage);
+    // Chama função que executa os testes de performance
+    processesPerformanceTests(inputMessage);
 }
 
-function encryptMessage(inputMessage) {
-    // Caminho da chave pública
-    const publicKeyPath = publicKeyTestPath;
+// Função para executar testes de segurança
+async function securityTests(){
+    // Salva a mensagem informada pelo usuário
+    const inputMessage = await getInputMessage();
 
+    // Cria as chaves RSA locais para criptografar e descriptografar a mensagem
+    createKeys();
+
+    // Chama função que executa os testes de segurança
+    processesSecurityTests(inputMessage);
+}
+
+// Executa testes de performance
+function processesPerformanceTests(inputMessage) {
+    console.log("--------------------------------------- Resultados da criptografia ---------------------------------------");
     // Criptografia usando Feistel, AES e RSA
-    const feistelAesRsaTime = measureExecutionTime(() => encryptWithFeistelAESRSA(inputMessage, publicKeyPath));
-    console.log(`Tempo de execução da criptografia com Feistel + AES + RSA: ${feistelAesRsaTime} ms`);
-
-    // Gera uma chave AES para o teste
-    const aesKey = crypto.randomBytes(32).toString('hex');
+    const feistelAesRsaTime = measureExecutionTime(() => encryptWithFeistelAESRSA(inputMessage, publicKeyTestPath));
+    const feistelAesRsaMemory = measureMemoryUsage(() => encryptWithFeistelAESRSA(inputMessage, publicKeyTestPath));
+    console.log(`Tempo de execução da criptografia Feistel + AES + RSA: ${feistelAesRsaTime} ms`);
+    console.log(`Consumo de memória da criptografia Feistel + AES + RSA: ${feistelAesRsaMemory} MB`);
 
     // Criptografia com AES
-    const aesOnlyTime = measureExecutionTime(() => encryptWithAESOnly(inputMessage, aesKey));
-    console.log(`Tempo de execução da criptografia com apenas AES: ${aesOnlyTime} ms`);
+    const keyAes = crypto.randomBytes(32).toString('hex');
+    const aesEncryptTime = measureExecutionTime(() => encryptWithAESOnly(inputMessage, keyAes));
+    const aesEncryptMemory = measureMemoryUsage(() => encryptWithAESOnly(inputMessage, keyAes));
+    console.log(`Tempo de execução da criptografia AES: ${aesEncryptTime} ms`);
+    console.log(`Consumo de memória da criptografia AES: ${aesEncryptMemory} MB`);
+
+    // Criptografar com Blowfish
+    const keyBlowfish = CryptoJS.lib.WordArray.random(16).toString();
+    const blowfishEncryptTime = measureExecutionTime(() => encryptWithBlowfish(inputMessage, keyBlowfish));
+    const blowfishEncryptMemory = measureMemoryUsage(() => encryptWithBlowfish(inputMessage, keyBlowfish));
+    console.log(`Tempo de execução da criptografia Blowfish: ${blowfishEncryptTime} ms`);
+    console.log(`Consumo de memória da criptografia Blowfish: ${blowfishEncryptMemory} MB`);
+
+    // Criptografar com DES
+    const keyDes = CryptoJS.lib.WordArray.random(16).toString();
+    const desEncryptTime = measureExecutionTime(() => encryptWithDES(inputMessage, keyDes));
+    const desEncryptMemory = measureMemoryUsage(() => encryptWithDES(inputMessage, keyDes));
+    console.log(`Tempo de execução da criptografia DES: ${desEncryptTime} ms`);
+    console.log(`Consumo de memória da criptografia DES: ${desEncryptMemory} MB`);
+
+    console.log("--------------------------------------- Resultados da descriptografia ---------------------------------------");
+    // Descriptografar usando Feistel, AES e RSA
+    const {encryptedMessage, encryptedSBox, encryptedAESKey} = encryptWithFeistelAESRSA(inputMessage, publicKeyTestPath);
+    const feistelAesRsaDecryptTime =  measureExecutionTime(() => decryptWithFeistelAesRsa(encryptedMessage, encryptedSBox, encryptedAESKey));
+    const feistelAesRsaDecryptMemory =  measureMemoryUsage(() => decryptWithFeistelAesRsa(encryptedMessage, encryptedSBox, encryptedAESKey));
+    console.log(`Tempo de execução da descriptografia Feistel + AES + RSA: ${feistelAesRsaDecryptTime} ms`);
+    console.log(`Consumo de memória da descriptografia Feistel + AES + RSA: ${feistelAesRsaDecryptMemory} MB`);
+
+    // Descriptografar usando AES
+    const messageAes = encryptWithAESOnly(inputMessage, keyAes);
+    const aesDecryptTime = measureExecutionTime(() => decryptTestWithAes(messageAes, keyAes));
+    const aesDecryptMemory = measureExecutionTime(() => decryptTestWithAes(messageAes, keyAes));
+    console.log(`Tempo de execução da descriptografia AES: ${aesDecryptTime} ms`);
+    console.log(`Consumo de memória da descriptografia AES: ${aesDecryptMemory} MB`);
+
+    // Descriptografar usando Blowfish
+    const messageBlowfish = encryptWithBlowfish(inputMessage, keyBlowfish);
+    const blowfishDecryptTime = measureExecutionTime(() => decryptWithBlowfish(messageBlowfish, keyBlowfish));
+    const blowfishDecryptMemory = measureExecutionTime(() => decryptWithBlowfish(messageBlowfish, keyBlowfish));
+    console.log(`Tempo de execução da descriptografia Blowfish: ${blowfishDecryptTime} ms`);
+    console.log(`Consumo de memória da descriptografia Blowfish: ${blowfishDecryptMemory} MB`);
+
+    // Descriptografar usando DES
+    const messageDes = encryptWithDES(inputMessage, keyDes);
+    const desDecryptTime = measureExecutionTime(() => decryptWithDES(messageDes, keyDes));
+    const desDecryptMemory = measureExecutionTime(() => decryptWithDES(messageDes, keyDes));
+    console.log(`Tempo de execução da descriptografia DES: ${desDecryptTime} ms`);
+    console.log(`Consumo de memória da descriptografia DES: ${desDecryptMemory} MB`);
 }
 
-// Função para medir o tempo de execução da criptografia
+// Executa testes de segurança
+function processesSecurityTests(inputMessage) {
+    
+}
+
+// Função para medir o tempo de execução da criptografia/descriptografia
 function measureExecutionTime(fn) {
     const start = process.hrtime.bigint();
     fn();
     const end = process.hrtime.bigint();
-    return (end - start) / BigInt(1e6); // Converte para milissegundos
+    return (end - start) / BigInt(1e6);
 }
+
+// Função para medir o uso de memória durante a execução da criptografia/descriptografia
+function measureMemoryUsage(fn) {
+    const start = process.memoryUsage().heapUsed;
+    fn();
+    const end = process.memoryUsage().heapUsed;
+    return (end - start) / 1024 / 1024;
+} 
 
 // Função para criptografar a mensagem usando Feistel, AES e RSA
 function encryptWithFeistelAESRSA(inputMessage,publicKeyTest) {
@@ -364,9 +433,56 @@ function encryptWithFeistelAESRSA(inputMessage,publicKeyTest) {
 
 // Função para criptografar a mensagem usando apenas AES
 function encryptWithAESOnly(inputMessage, aesKey) {
-    // Criptografa a mensagem com a chave AES
     const ciphertext = CryptoJS.AES.encrypt(inputMessage, aesKey).toString();
     return ciphertext;
+}
+
+// Função para criptografar a mensagem usando apenas blowfish
+function encryptWithBlowfish(inputMessage, keyBlowfish) {
+    const encryptText = CryptoJS.Blowfish.encrypt(inputMessage, keyBlowfish).toString();
+    return encryptText;
+}
+
+// Função para criptografar a mensagem usando apenas DES
+function encryptWithDES(inputMessage, keyDes) {
+    const encryptText = CryptoJS.DES.encrypt(inputMessage, keyDes).toString();
+    return encryptText;
+}
+
+// Função para descriptografar usando Feistel + AES + RSA
+function decryptWithFeistelAesRsa(textMessage, encryptedSBox, encryptedAESKey) {
+    // Converte a mensagem criptografada de hexadecimal para buffer
+    const encryptedMessage = Buffer.from(textMessage, 'hex');
+
+    // Descriptografa a chave AES usando a chave privada RSA
+    const passphrase = "";
+    const aesKey = decryptWithRSA(encryptedAESKey, privateKeyTestPath, passphrase).toString('utf8');
+
+    // Descriptografa o sBox usando a chave AES
+    const decryptedSBox = decryptWithAES(encryptedSBox, aesKey);
+
+    // Descriptografa a mensagem usando o sBox descriptografado
+    const decryptedMessageBuffer = feistelDecipherBuffer(encryptedMessage, decryptedSBox, 16);
+
+    return decryptedMessageBuffer;
+}
+
+// Função para descriptografar usando AES
+function decryptTestWithAes(messageAes, keyAes) {
+    const bytes = CryptoJS.AES.decrypt(messageAes, keyAes);
+    return bytes.toString(CryptoJS.enc.Utf8);
+}
+
+// Função para descriptografar usando Blowfish
+function decryptWithBlowfish(ciphertext, key) {
+    const bytes = CryptoJS.Blowfish.decrypt(ciphertext, key);
+    return bytes.toString(CryptoJS.enc.Utf8);
+}
+
+// Funçõa para descriptografar usando DES
+function decryptWithDES(ciphertext, key) {
+    const bytes = CryptoJS.DES.decrypt(ciphertext, key);
+    return bytes.toString(CryptoJS.enc.Utf8);
 }
 
 function createKeys() {
