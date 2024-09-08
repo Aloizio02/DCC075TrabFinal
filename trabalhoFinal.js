@@ -1,10 +1,14 @@
 const crypto = require('crypto');
+const path = require('path');
 const fs = require('fs');
 const CryptoJS = require('crypto-js');
 const readline = require('readline').createInterface({
     input: process.stdin,
     output: process.stdout
 });
+
+var publicKeyTestPath;
+var privateKeyTestPath;
 
 // ----------------------------------------------------------------------------- Etapa de criptografia -----------------------------------------------------------------------------
 // Função principal para a criptografia
@@ -277,20 +281,145 @@ function feistelDecipherBuffer(encryptedBuffer, sBox, rounds) {
     return outputBuffer;
 }
 
+// ----------------------------------------------------------------------------- Ambiente de testes -----------------------------------------------------------------------------
+// Função principal para o ambiente de testes
+async function testEnvironment() {
+    console.log("Escolha o tipo de teste a ser executado:");
+    console.log("1. Testes de Performance");
+    console.log("2. Testes de Segurança");
+
+    const option = await new Promise((resolve) => {
+        readline.question("Opção: ", (option) => resolve(option.trim()));
+    });
+
+    if (option === '1') {
+        await performanceTests();
+    } else if (option === '2') {
+        await securityTests();
+    } else {
+        console.log("Opção inválida! Tente novamente.");
+        await testEnvironment();
+    }
+}
+
+// Função para executar testes de performance
+async function performanceTests(){
+    // Salva a mensagem informada pelo usuário
+    const inputMessage = await getInputMessage();
+
+    // Cria as chaves locais para criptografar e descriptografar a mensagem
+    createKeys();
+
+    // Chama função que calcula tempo de execução e uso de memória entre algoritmos no momento de criptografar
+    encryptMessage(inputMessage);
+}
+
+function encryptMessage(inputMessage) {
+    // Caminho da chave pública
+    const publicKeyPath = publicKeyTestPath;
+
+    // Criptografia usando Feistel, AES e RSA
+    const feistelAesRsaTime = measureExecutionTime(() => encryptWithFeistelAESRSA(inputMessage, publicKeyPath));
+    console.log(`Tempo de execução da criptografia com Feistel + AES + RSA: ${feistelAesRsaTime} ms`);
+
+    // Gera uma chave AES para o teste
+    const aesKey = crypto.randomBytes(32).toString('hex');
+
+    // Criptografia com AES
+    const aesOnlyTime = measureExecutionTime(() => encryptWithAESOnly(inputMessage, aesKey));
+    console.log(`Tempo de execução da criptografia com apenas AES: ${aesOnlyTime} ms`);
+}
+
+// Função para medir o tempo de execução da criptografia
+function measureExecutionTime(fn) {
+    const start = process.hrtime.bigint();
+    fn();
+    const end = process.hrtime.bigint();
+    return (end - start) / BigInt(1e6); // Converte para milissegundos
+}
+
+// Função para criptografar a mensagem usando Feistel, AES e RSA
+function encryptWithFeistelAESRSA(inputMessage,publicKeyTest) {
+    // Gera uma sBox randomicamente
+    const sBox = generateSboxRandomly();
+
+    // Criptografa a mensagem com a cifra de Feistel
+    const encryptedMessage = feistelCipherBuffer(Buffer.from(inputMessage), sBox, 16);
+
+    // Gera uma chave AES
+    const aesKey = crypto.randomBytes(32).toString('hex');
+
+    // Criptografa o sBox com a chave AES
+    const encryptedSBox = encryptWithAES(JSON.stringify(sBox), aesKey);
+
+    // Criptografa a chave AES usando a chave pública RSA do destinatário (neste caso a própria máquina)
+    const encryptedAESKey = encryptWithRSA(aesKey, publicKeyTest);
+
+    return {
+        encryptedMessage,
+        encryptedSBox,
+        encryptedAESKey
+    };
+}
+
+// Função para criptografar a mensagem usando apenas AES
+function encryptWithAESOnly(inputMessage, aesKey) {
+    // Criptografa a mensagem com a chave AES
+    const ciphertext = CryptoJS.AES.encrypt(inputMessage, aesKey).toString();
+    return ciphertext;
+}
+
+function createKeys() {
+    // Diretório onde as chaves serão armazenadas
+    const keysDir = path.join(__dirname, 'keysTestEnvironment');
+
+    // Verifica se a pasta 'keys' existe; caso contrário, cria
+    if (!fs.existsSync(keysDir)) {
+        fs.mkdirSync(keysDir);
+    }
+
+    // Gera par de chaves RSA
+    const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
+        modulusLength: 2048,
+        publicKeyEncoding: {
+            type: 'pkcs1',
+            format: 'pem'
+        },
+        privateKeyEncoding: {
+            type: 'pkcs1',
+            format: 'pem'
+        }
+    });
+
+    // Caminhos completos para os arquivos de chaves
+    publicKeyTestPath = path.join(keysDir, 'public_key.pem');
+    privateKeyTestPath = path.join(keysDir, 'private_key.pem');
+
+    // Salvar as chaves em arquivos
+    fs.writeFileSync(publicKeyTestPath, publicKey);
+    fs.writeFileSync(privateKeyTestPath, privateKey);
+}
+
+// ----------------------------------------------------------------------------- Função Principal -----------------------------------------------------------------------------
 // Chamadas principais para as funções de criptografia, descriptografia e ambiente de testes
 (async () => {
     console.log("Escolha uma opção: ");
     console.log("1. Criptografar uma mensagem");
     console.log("2. Descriptografar uma mensagem");
+    console.log("3. Ambiente de testes");
 
-    readline.question("Opção: ", async (option) => {
-        if (option === '1') {
-            await encrypt();
-        } else if (option === '2') {
-            await decrypt();
-        } else {
-            console.log("Opção inválida!");
-        }
-        readline.close();
+    const option = await new Promise((resolve) => {
+        readline.question("Opção: ", (option) => resolve(option.trim()));
     });
+
+    if (option === '1') {
+        await encrypt();
+    } else if (option === '2') {
+        await decrypt();
+    } else if (option === '3') {
+        await testEnvironment();
+    } else {
+        console.log("Opção inválida!");
+    }
+    readline.close();
 })();
