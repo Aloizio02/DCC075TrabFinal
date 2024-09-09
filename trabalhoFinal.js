@@ -302,6 +302,8 @@ async function testEnvironment() {
     }
 }
 
+// --------------------------------------------------------------------- Testes de performance ---------------------------------------------------------------------
+
 // Função para executar testes de performance
 async function performanceTests(){
     // Salva a mensagem informada pelo usuário
@@ -312,18 +314,6 @@ async function performanceTests(){
 
     // Chama função que executa os testes de performance
     processesPerformanceTests(inputMessage);
-}
-
-// Função para executar testes de segurança
-async function securityTests(){
-    // Salva a mensagem informada pelo usuário
-    const inputMessage = await getInputMessage();
-
-    // Cria as chaves RSA locais para criptografar e descriptografar a mensagem
-    createKeys();
-
-    // Chama função que executa os testes de segurança
-    processesSecurityTests(inputMessage);
 }
 
 // Executa testes de performance
@@ -386,10 +376,6 @@ function processesPerformanceTests(inputMessage) {
     console.log(`Consumo de memória da descriptografia DES: ${desDecryptMemory} MB`);
 }
 
-// Executa testes de segurança
-function processesSecurityTests(inputMessage) {
-    
-}
 
 // Função para medir o tempo de execução da criptografia/descriptografia
 function measureExecutionTime(fn) {
@@ -411,19 +397,19 @@ function measureMemoryUsage(fn) {
 function encryptWithFeistelAESRSA(inputMessage,publicKeyTest) {
     // Gera uma sBox randomicamente
     const sBox = generateSboxRandomly();
-
+    
     // Criptografa a mensagem com a cifra de Feistel
     const encryptedMessage = feistelCipherBuffer(Buffer.from(inputMessage), sBox, 16);
-
+    
     // Gera uma chave AES
     const aesKey = crypto.randomBytes(32).toString('hex');
-
+    
     // Criptografa o sBox com a chave AES
     const encryptedSBox = encryptWithAES(JSON.stringify(sBox), aesKey);
-
+    
     // Criptografa a chave AES usando a chave pública RSA do destinatário (neste caso a própria máquina)
     const encryptedAESKey = encryptWithRSA(aesKey, publicKeyTest);
-
+    
     return {
         encryptedMessage,
         encryptedSBox,
@@ -453,17 +439,17 @@ function encryptWithDES(inputMessage, keyDes) {
 function decryptWithFeistelAesRsa(textMessage, encryptedSBox, encryptedAESKey) {
     // Converte a mensagem criptografada de hexadecimal para buffer
     const encryptedMessage = Buffer.from(textMessage, 'hex');
-
+    
     // Descriptografa a chave AES usando a chave privada RSA
     const passphrase = "";
     const aesKey = decryptWithRSA(encryptedAESKey, privateKeyTestPath, passphrase).toString('utf8');
-
+    
     // Descriptografa o sBox usando a chave AES
     const decryptedSBox = decryptWithAES(encryptedSBox, aesKey);
-
+    
     // Descriptografa a mensagem usando o sBox descriptografado
     const decryptedMessageBuffer = feistelDecipherBuffer(encryptedMessage, decryptedSBox, 16);
-
+    
     return decryptedMessageBuffer;
 }
 
@@ -488,12 +474,12 @@ function decryptWithDES(ciphertext, key) {
 function createKeys() {
     // Diretório onde as chaves serão armazenadas
     const keysDir = path.join(__dirname, 'keysTestEnvironment');
-
+    
     // Verifica se a pasta 'keys' existe; caso contrário, cria
     if (!fs.existsSync(keysDir)) {
         fs.mkdirSync(keysDir);
     }
-
+    
     // Gera par de chaves RSA
     const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
         modulusLength: 2048,
@@ -506,14 +492,72 @@ function createKeys() {
             format: 'pem'
         }
     });
-
+    
     // Caminhos completos para os arquivos de chaves
     publicKeyTestPath = path.join(keysDir, 'public_key.pem');
     privateKeyTestPath = path.join(keysDir, 'private_key.pem');
-
+    
     // Salvar as chaves em arquivos
     fs.writeFileSync(publicKeyTestPath, publicKey);
     fs.writeFileSync(privateKeyTestPath, privateKey);
+}
+
+// --------------------------------------------------------------------- Testes de segurança ---------------------------------------------------------------------
+// Função para executar testes de segurança
+async function securityTests(){
+    // Salva a mensagem informada pelo usuário
+    const inputMessage = await getInputMessage();
+    
+    // Cria as chaves RSA locais para criptografar e descriptografar a mensagem
+    createKeys();
+    
+    // Chama função que executa o teste de segurança
+    processesSecurityTests(inputMessage);
+}
+
+// Executa testes de segurança
+function processesSecurityTests(inputMessage) {
+
+    // Cálculo da entropia usando AES
+    const aesKey = crypto.randomBytes(32).toString('hex');
+    const aesEncrypt = encryptWithAESOnly(inputMessage, aesKey);
+    const aesEncryptBuffer = Buffer.from(aesEncrypt, 'base64');
+    const aesEntropy = calculateEntropy(aesEncryptBuffer);
+    console.log(`Entropia da mensagem criptografada: ${aesEntropy}`);
+
+    // Cálculo da entropia usando Blowfish
+    const blowfishKey = CryptoJS.lib.WordArray.random(16).toString();
+    const blowfishEncrypt = encryptWithBlowfish(inputMessage, blowfishKey);
+    const blowfishEncryptBuffer = Buffer.from(blowfishEncrypt, 'base64');
+    const blowfishEntropy = calculateEntropy(blowfishEncryptBuffer);
+    console.log(`Entropia da mensagem criptografada: ${blowfishEntropy}`);
+
+    // Cálculo da entropia usando DES
+    const desKey = CryptoJS.lib.WordArray.random(16).toString();
+    const desEncrypt = encryptWithDES(inputMessage, desKey);
+    const desEncryptBuffer = Buffer.from(desEncrypt, 'base64');
+    const desEntropy = calculateEntropy(desEncryptBuffer);
+    console.log(`Entropia da mensagem criptografada: ${desEntropy}`);
+}
+
+// Realiza cálculo de entropia
+function calculateEntropy(encryptedBuffer) {
+    const histogram = {};
+
+    for (const byte of encryptedBuffer) {
+        histogram[byte] = (histogram[byte] || 0) + 1;
+    }
+
+    const totalBytes = encryptedBuffer.length;
+    let entropyValue = 0;
+
+    // Calcula a entropia de Shannon
+    for (const count of Object.values(histogram)) {
+        const probability = count / totalBytes;
+        entropyValue -= probability * Math.log2(probability);
+    }
+
+    return entropyValue;
 }
 
 // ----------------------------------------------------------------------------- Função Principal -----------------------------------------------------------------------------
