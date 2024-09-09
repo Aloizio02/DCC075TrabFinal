@@ -518,26 +518,32 @@ async function securityTests(){
 // Executa testes de segurança
 function processesSecurityTests(inputMessage) {
 
+    // Cálculo da entropia usando Feistel + AES + RSA
+    const {encryptedMessage, encryptedSBox, encryptedAESKey} = encryptWithFeistelAESRSA(inputMessage, publicKeyTestPath);
+    const feistelAesRsaEncryptBuffer = Buffer.from(encryptedMessage + encryptedSBox + encryptedAESKey, 'base64');
+    const feistelAesRsaEntropy = calculateEntropy(feistelAesRsaEncryptBuffer);
+    console.log(`Entropia da mensagem criptografada Feistel + AES + RSA: ${feistelAesRsaEntropy}`);
+
     // Cálculo da entropia usando AES
     const aesKey = crypto.randomBytes(32).toString('hex');
     const aesEncrypt = encryptWithAESOnly(inputMessage, aesKey);
     const aesEncryptBuffer = Buffer.from(aesEncrypt, 'base64');
     const aesEntropy = calculateEntropy(aesEncryptBuffer);
-    console.log(`Entropia da mensagem criptografada: ${aesEntropy}`);
+    console.log(`Entropia da mensagem criptografada AES: ${aesEntropy}`);
 
     // Cálculo da entropia usando Blowfish
     const blowfishKey = CryptoJS.lib.WordArray.random(16).toString();
     const blowfishEncrypt = encryptWithBlowfish(inputMessage, blowfishKey);
     const blowfishEncryptBuffer = Buffer.from(blowfishEncrypt, 'base64');
     const blowfishEntropy = calculateEntropy(blowfishEncryptBuffer);
-    console.log(`Entropia da mensagem criptografada: ${blowfishEntropy}`);
+    console.log(`Entropia da mensagem criptografada Blowfish: ${blowfishEntropy}`);
 
     // Cálculo da entropia usando DES
     const desKey = CryptoJS.lib.WordArray.random(16).toString();
     const desEncrypt = encryptWithDES(inputMessage, desKey);
     const desEncryptBuffer = Buffer.from(desEncrypt, 'base64');
     const desEntropy = calculateEntropy(desEncryptBuffer);
-    console.log(`Entropia da mensagem criptografada: ${desEntropy}`);
+    console.log(`Entropia da mensagem criptografada DES: ${desEntropy}`);
 }
 
 // Realiza cálculo de entropia
