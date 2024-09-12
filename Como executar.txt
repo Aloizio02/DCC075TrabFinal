@@ -1,0 +1,4 @@
+- Para realizar a execução do código é necessário ter o node instalado na máquina;
+- Após instalação, para executar o código basta colocar "node trabalhoFinal.js" no terminal;
+- Uma vez no menu, basta selecionar a opção que deseja (criptografar, descriptografar ou usar ambiente de testes);
+- Seguir, informando o que for pedido para a execução de cada uma das opções do menu
